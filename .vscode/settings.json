@@ -1,5 +1,6 @@
 {
     "python.pythonPath": "./venv/bin/python",
-    "cornflakes.linter.executablePath": "/home/think/learn/flask_new/venv/bin/flake8",
+    "python.linting.flake8Enabled": true,
+    "cornflakes.linter.executablePath": "/home/think/learn/flask/venv/bin/flake8",
     "cornflakes.linter.run": "onType"
 }
