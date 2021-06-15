@@ -3,8 +3,7 @@
 
 from datetime import datetime
 
-from flask import Flask, redirect, render_template, session
-from flask.globals import session
+from flask import Flask, redirect, render_template, session, flash, url_for
 from flask_script import Manager
 from flask_bootstrap import Bootstrap
 from flask_moment import Moment
@@ -29,9 +28,12 @@ class NameForm(FlaskForm):
 def index():
     form = NameForm()
     if form.validate_on_submit():
+        old_name = session.get("name")
+        if old_name is not None and old_name != form.name.data:
+            flash("Look like you have change your name ")
         session["name"] = form.name.data
         form.name.data = ""
-        return redirect("/")
+        return redirect(url_for("index"))
     name = session["name"]
     return render_template("index.html",
                            current_time=datetime.utcnow(),
