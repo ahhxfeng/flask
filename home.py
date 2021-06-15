@@ -16,7 +16,10 @@ moment = Moment(app=app)
 
 @app.route("/")
 def index():
-    return render_template("index.html", current_time=datetime.utcnow()), 200
+    print("-------------------------")
+    print(datetime.utcnow())
+    return render_template("index.html",
+                           current_time=datetime.utcnow()), 200
 
 
 @app.route("/user/<name>")
