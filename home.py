@@ -3,23 +3,40 @@
 
 from datetime import datetime
 
-from flask import Flask, redirect, render_template
+from flask import Flask, redirect, render_template, session
+from flask.globals import session
 from flask_script import Manager
 from flask_bootstrap import Bootstrap
 from flask_moment import Moment
+from flask_wtf import FlaskForm
+from wtforms import SubmitField, StringField
+from wtforms.validators import DataRequired
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = "hard to guess "
+
 manager = Manager(app=app)
 bootstrap = Bootstrap(app=app)
 moment = Moment(app=app)
 
 
-@app.route("/")
+class NameForm(FlaskForm):
+    name = StringField("What is your name ? ", validators=[DataRequired()])
+    submit = SubmitField("sumbit")
+
+
+@app.route("/", methods=["GET", "POST"])
 def index():
-    print("-------------------------")
-    print(datetime.utcnow())
+    form = NameForm()
+    if form.validate_on_submit():
+        session["name"] = form.name.data
+        form.name.data = ""
+        return redirect("/")
+    name = session["name"]
     return render_template("index.html",
-                           current_time=datetime.utcnow()), 200
+                           current_time=datetime.utcnow(),
+                           form=form,
+                           name=name), 200
 
 
 @app.route("/user/<name>")
