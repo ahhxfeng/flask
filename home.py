@@ -1,7 +1,9 @@
 #! venv/bin/python
 # coding=utf-8
 
+import os
 from datetime import datetime
+from threading import Thread
 
 from flask import Flask, redirect, render_template, session, flash, url_for
 from flask_script import Manager
@@ -11,16 +13,30 @@ from flask_wtf import FlaskForm
 from wtforms import SubmitField, StringField
 from wtforms.validators import DataRequired
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_mail import Mail, Message
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "hard to guess "
-app.config["SQLALCHEMY_DATABASE_URI"] = "mysql://think:123456@192.168.31.60/test"
+app.config[
+    "SQLALCHEMY_DATABASE_URI"] = "mysql://think:123456@192.168.31.60/test"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config["FLASKY_ADMIN"] = "779107975@qq.com"
+app.config["FLASKY_MAIL_SUBJECT_PREFIX"] = "[Flasky]"
+app.config["FLASKY_MAIL_SENDER"] = "Flasky Admin <779107975@qq.com>"
+app.config["MAIL_SERVER"] = "smtp.qq.com"
+app.config["MAIL_PORT"] = 587
+app.config["MAIL_USE_TLS"] = True
+app.config["MAIL_USERNAME"] = os.getenv("mail_username")
+# app.config["MAIL_PASSWORD"] = os.getenv("mail_password")
+app.config["MAIL_PASSWORD"] = "zuhhszjaokwpbefj"
 
 manager = Manager(app=app)
 bootstrap = Bootstrap(app=app)
 moment = Moment(app=app)
 db = SQLAlchemy(app=app)
+migrate = Migrate(app=app, db=db)
+mail = Mail(app=app)
 
 
 class NameForm(FlaskForm):
@@ -48,6 +64,22 @@ class User(db.Model):
         return "<User {}>".format(self.name)
 
 
+def send_async_mail(app, msg):
+    with app.app_context():
+        mail.send(msg)
+
+
+def send_mail(subject, to, templates, **kwargs):
+    msg = Message(app.config["FLASKY_MAIL_SUBJECT_PREFIX"] + subject,
+                  recipients=[to],
+                  sender=app.config["FLASKY_MIAL_SENDER"])
+    msg.body = render_template(templates + "txt", **kwargs)
+    msg.html = render_template(templates + "html", **kwargs)
+    # mail.send(msg)
+    thr = Thread(target=send_async_mail, )
+
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     form = NameForm()
@@ -55,14 +87,26 @@ def index():
         old_name = session.get("name")
         if old_name is not None and old_name != form.name.data:
             flash("Look like you have change your name ")
+        user = User.query.filter_by(username=form.name.data).first()
+        if user is None:
+            user = User(username=form.name.data)
+            db.session.add(user)
+            session["known"] = False
+            if app.config["FLASKY_ADMIN"]:
+                send_mail("New User",
+                          app.config["FLASKY_ADMIN"],
+                          "mail/new_user",
+                          user=user)
+        else:
+            session["known"] = True
         session["name"] = form.name.data
         form.name.data = ""
         return redirect(url_for("index"))
-    name = session["name"]
     return render_template("index.html",
                            current_time=datetime.utcnow(),
                            form=form,
-                           name=name), 200
+                           name=session.get("name"),
+                           known=session.get("known", False)), 200
 
 
 @app.route("/user/<name>")
@@ -71,7 +115,7 @@ def user(name):
 
 
 @app.errorhandler(404)
-def page_not_fou(e):
+def page_not_found(e):
     return render_template("404.html"), 404
 
 
