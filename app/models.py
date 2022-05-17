@@ -1,16 +1,25 @@
 #! /usr/bin/env python
 # coding=utf-8
 
-import email
 import hashlib
 from datetime import datetime
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
-from sqlalchemy import true
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import current_app, request
 from flask_login import UserMixin, AnonymousUserMixin
 
 from . import db, login_m
+
+
+class Follow(db.Model):
+    __tablename__ = "follows"
+    follower_id = db.Column(db.Integer,
+                            db.ForeignKey("users.id"),
+                            primary_key=True)
+    followed_id = db.Column(db.Interger,
+                            db.ForeignKey("users.id"),
+                            primary_key=True)
+    timestamp = db.Column(db.Datetime, default=datetime.utcnow)
 
 
 class User(UserMixin, db.Model):
@@ -28,6 +37,16 @@ class User(UserMixin, db.Model):
     confirmed = db.Column(db.Boolean, default=False)
     avatar_hash = db.Column(db.String(32))
     posts = db.relationship("Post", backref="author", lazy="dynamic")
+    followers = db.relationship("Follow",
+                                foreign_keys=[Follow.followers_id],
+                                backref=db.backref("followed", lazy="joined"),
+                                lazy="dynamic",
+                                cascade="all, delete-orphan")
+    followed = db.relathionship("Follow",
+                                foreign_keys=[Follow.followed_id],
+                                backref=db.backref("follower", lazy="joined"),
+                                lazy="dynamic",
+                                cascade="all, delete-orphan")
 
     def __init__(self, **kwargs):
         super(User, self).__init__(**kwargs)
@@ -93,6 +112,23 @@ class User(UserMixin, db.Model):
         return "{url}/{hash}?s={size}%d={defualt}&r={rating}".format(
             url=url, hash=hash, size=size, rating=rating)
 
+    def follow(self, user):
+        if not self.is_following(user):
+            f = Follow(follower=self, followed=user)
+            db.session.add(f)
+
+    def unfollow(self, user):
+        f = self.followed.filter_by(followed_id=user.id).first()
+        if f:
+            db.session.delete(f)
+
+    def is_following(self, user):
+        return self.followed.filter_by(followed_id=user.id).first() is not None
+
+    def is_followed_by(self, user):
+        return self.followers.filter_by(
+            follower_id=user.id).first() is not None
+
     @staticmethod
     def generate_fake(count=100):
         from sqlalchemy.exc import IntegrityError
@@ -117,6 +153,7 @@ class User(UserMixin, db.Model):
 
 
 class AnonymousUser(AnonymousUserMixin):
+
     def can(self, permissions):
         return False
 
@@ -176,7 +213,7 @@ class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     body = db.Column(db.Text)
     timestamp = db.Column(db.DataTime, index=True, default=datetime.utcnow)
-    author_id = db.Colmun(db.Integer, db.ForeignKey("users.id"))
+    author_id = db.Column(db.Integer, db.ForeignKey("users.id"))
 
     @staticmethod
     def generate_fake(count=100):
