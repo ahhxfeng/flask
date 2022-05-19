@@ -2,9 +2,10 @@
 # coding=utf-8
 
 from datetime import datetime
+from distutils.log import error
 from os import abort, name
 from urllib import request
-from flask import render_template, redirect, session, url_for, current_app, flash
+from flask import render_template, redirect, session, url_for, current_app, flash, make_response
 from flask_login import current_user, login_required
 from flask_sqlalchemy.model import NameMetaMixin
 from app.decorators import admin_required, permission_required
@@ -51,8 +52,38 @@ def index():
                     author=current_user._get_current_object())
         db.session.add(post)
         return redirect(".index")
-    posts = Post.query.order_by(Post.timestamp.desc()).all()
-    return render_template("index.html", form=form, posts=posts)
+    # posts = Post.query.order_by(Post.timestamp.desc()).all()
+    show_followed = False
+    if current_user.is_authenticated():
+        show_followed = bool(request.cookies.get("show_followed", ""))
+    if show_followed:
+        query = current_user.followed_posts
+    else:
+        query = Post.query
+    pagination = query.order_by(Post.timestamp.desc()).paginate(
+        "page",
+        per_page=current_app.config["FLASK_POSTS_PER_PAGE"],
+        error_out=False)
+    posts = pagination.items
+    return render_template("index.html",
+                           form=form,
+                           posts=posts,
+                           show_followed=show_followed,
+                           pagination=pagination)
+
+@main.route("/all")
+@login_required
+def show_all():
+    resp = make_response(redirect(url_for(".index")))
+    resp.set_cookie("show_followed", "", max_age=30*24*60*60)
+    return resp
+
+@main.route("/followed")
+@login_required
+def show_followed():
+    resp = make_response(redirect(url_for(".index")))
+    resp.set_cookie("show_followed", "1", max_age=30*24*60*60)
+    return resp
 
 
 @main.route("/user/<username>")
