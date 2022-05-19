@@ -1,7 +1,6 @@
 #! /bin/env python
 # coding=utf-8
 
-from crypt import methods
 from datetime import datetime
 from os import abort, name
 from urllib import request
