@@ -1,8 +1,10 @@
 #! /usr/bin/env python
 # coding=utf-8
 
+from email.policy import default
 import hashlib
 from datetime import datetime
+from re import U
 from itsdangerous import TimedJSONWebSignatureSerializer as Serializer
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import current_app, request
@@ -56,6 +58,7 @@ class User(UserMixin, db.Model):
                 self.role = Role.query.filter_by(name="Administrator").first()
             if self.role is None:
                 self.role = Role.query.filter_by(default=True).first()
+        self.follow(self)
 
     def can(self, permissions):
         return self.role is not None and (self.role.permissions
@@ -156,6 +159,16 @@ class User(UserMixin, db.Model):
                 db.session.commit()
             except IntegrityError:
                 db.session.rollback()
+    
+    @staticmethod
+    def add_self_follows():
+        for user in User.query.all():
+            if not user.is_following(user):
+                user.follow(user)
+                db.session.add(user)
+                db.session.commit(user)
+            
+
 
 
 class AnonymousUser(AnonymousUserMixin):
@@ -235,6 +248,13 @@ class Post(db.Model):
                      author=u)
             db.session.add(p)
             db.session.commit()
+
+class Comment(db.Model):
+    __tablename__ = "commnets"
+    id = db.Column(db.Integer, primary_key=True)
+    body = db.Column(db.Text)
+    body_html = db.Column(db.Text)
+    timestamp = db.Column(db.Datetime, index=True, default=datetime.utcnow)
 
 
 @login_m.user_loader
